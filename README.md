@@ -1,3 +1,9 @@
+#App CineBus
+
+1. Instalar todas las dependencias
+2. python3 demo.py
+
+
 Install:
 
 '''
