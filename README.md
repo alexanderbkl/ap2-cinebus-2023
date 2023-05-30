@@ -13,6 +13,7 @@ pip3 install folium networkx matplotlib osmnx staticmap haversine
 pip3 install beautifulsoup4 requests lxml
 pip3 install geopy geopandas
 pip3 install scikit-learn
+pip3 install pillow
 '''
 
 Descargar e instalar graphviz de https://www.graphviz.org/download/https://www.graphviz.org/download/

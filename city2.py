@@ -10,7 +10,8 @@ from geopy.distance import geodesic
 from buses import BusesGraph, get_buses_graph
 from haversine import haversine, Unit
 import matplotlib.pyplot as plt
-from staticmap import StaticMap, CircleMarker, Line
+from staticmap import StaticMap, CircleMarker, Line, IconMarker
+from PIL import Image, ImageDraw, ImageFont
 
 from typing import List, Union
 
@@ -141,20 +142,23 @@ def get_stop_subgraph(g: CityGraph) -> CityGraph:
     
     return stop_subgraph
 
+def get_intersection_subgraph(g: CityGraph) -> CityGraph:
+    # Get all nodes of type 'intersection'
+    intersection_nodes = [node for node, data in g.nodes(data=True) if data.get('type') == 'intersection']
+    
+    # Create a subgraph from the original graph using only these nodes
+    intersection_subgraph = g.subgraph(intersection_nodes)
+    
+    return intersection_subgraph
+
 def find_path(g: CityGraph, dst: Coord, src: Coord) -> List[Coord]:
     # Find nearest nodes to the source and destination coordinates in the original osmnx graph
     #print the first node and edge in g
     buses_graph = get_buses_graph()
-    first_node = list(g.nodes(data=True))[0]
-    first_edge = list(g.edges(data=True))[0]
-    print('first_node: ', first_node)
-    print('first_edge: ', first_edge)
     
     dst_nearest = distance.nearest_nodes(buses_graph, src[1], src[0])
     src_nearest = distance.nearest_nodes(buses_graph, dst[1], dst[0])
     
-    print('src_nearest: ', src_nearest)
-    print('dst_nearest: ', dst_nearest)
 
     # Calculate the shortest path in the city graph
     try: 
@@ -181,9 +185,9 @@ def plot(g: CityGraph, filename: str) -> None:
     m = StaticMap(800, 800)
     for node in g.nodes:
         if g.nodes[node]['type'] == 'intersection':
-            m.add_marker(CircleMarker((g.nodes[node]['x'], g.nodes[node]['y']), 'green', 2))
+            m.add_marker(CircleMarker((g.nodes[node]['y'], g.nodes[node]['x']), 'green', 2))
         elif g.nodes[node]['type'] == 'stop':
-            m.add_marker(CircleMarker((g.nodes[node]['x'], g.nodes[node]['y']), 'red', 3))
+            m.add_marker(CircleMarker((g.nodes[node]['y'], g.nodes[node]['x']), 'red', 3))
         
     for edge in g.edges:
         edge_type = g.nodes[edge[0]]['type']
@@ -194,35 +198,44 @@ def plot(g: CityGraph, filename: str) -> None:
         else:
             color = 'black'  # Default color if type is not defined
         
-        m.add_line(Line([(g.nodes[edge[0]]['x'], g.nodes[edge[0]]['y']), (g.nodes[edge[1]]['x'], g.nodes[edge[1]]['y'])], color, 1))
+        m.add_line(Line([(g.nodes[edge[0]]['y'], g.nodes[edge[0]]['x']), (g.nodes[edge[1]]['y'], g.nodes[edge[1]]['x'])], color, 1))
     
     image = m.render()
     image.save(filename)
     
     
 
+def create_icon(text: str, font_path: str, font_size: int, filename: str):
+    font = ImageFont.truetype(font_path, font_size)
+    text_width, text_height = font.getsize(text)
+    img = Image.new('RGBA', (text_width, text_height), (255, 255, 255, 0))
+    d = ImageDraw.Draw(img)
+    d.text((0,0), text, font=font, fill=(255,255,255,255))
+    img.save(filename)
 
 
 def plot_path(g: CityGraph, p: List[Coord], filename: str) -> None:
-    # Initialize the map
+    osmnx_g = get_osmnx_graph()
     m = StaticMap(800, 800)
 
-    # Add markers for nodes and lines for edges in the path
     for i in range(len(p) - 1):
-        # (longitude, latitude)
-        
-        m.add_marker(CircleMarker((g.nodes[p[i]]['x'], g.nodes[p[i]]['y']), 'red', 3))
-        m.add_line(
-            Line([(g.nodes[p[i]]['x'], g.nodes[p[i]]['y']), (g.nodes[p[i + 1]]['x'], g.nodes[p[i + 1]]['y'])], 'blue', 2))
+        #name of the stop line
+        #g.nodes[p[i]]['line']
+        m.add_marker(CircleMarker((g.nodes[p[i]]['x'], g.nodes[p[i]]['y']), 'red', 10))
+
+        # Shortest path in osmnx graph between current and next node
+        # Ensure you get the shortest path with the proper format (x,y) which can be achieved by using osmnx_g.nodes[node]['y'] and osmnx_g.nodes[node]['x']
+        #g nodes y is 2.20 and x is 41.40
+        src_nearest = distance.nearest_nodes(osmnx_g, g.nodes[p[i]]['x'], g.nodes[p[i]]['y'])
+        dst_nearest = distance.nearest_nodes(osmnx_g, g.nodes[p[i+1]]['x'], g.nodes[p[i+1]]['y'])
+
+        shortest_path_osmnx = shortest_path(osmnx_g, src_nearest, dst_nearest, weight='length')
+        path_as_coordinates_osmnx = [(osmnx_g.nodes[node]['x'], osmnx_g.nodes[node]['y']) for node in shortest_path_osmnx]
+        m.add_line(Line(path_as_coordinates_osmnx, 'black', 5))
 
     # Add a marker for the final destination
-    # (longitude, latitude)
-        
-
-
-    # Render the image and save it
     try:
-        m.add_marker(CircleMarker((g.nodes[p[-1]]['x'], g.nodes[p[-1]]['y']), 'green', 4))
+        m.add_marker(CircleMarker((g.nodes[p[-1]]['x'], g.nodes[p[-1]]['y']), 'green', 10))
         image = m.render()
         image.save(filename)
     except IndexError:
@@ -232,7 +245,9 @@ def plot_path(g: CityGraph, p: List[Coord], filename: str) -> None:
         print('Error while plotting path:', e)
         return
 
-graph = get_city_graph()
+#graph = get_city_graph()
 
-#show(graph)
-plot(graph, 'city_graph.png')
+#stop_subgraph = get_stop_subgraph(graph)
+#osmng_g = get_osmnx_graph()
+#show(osmng_g)
+#plot(graph, 'city_graph.png')
