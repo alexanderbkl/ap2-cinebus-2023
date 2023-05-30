@@ -115,20 +115,13 @@ def main():
         print("You will not be able to reach the cinema in time for the projection.")
     #projection_time is f.e. 1345 (hhmm)
 
-    #print the city_graph edges names
-    #for edge in city_graph.edges:
-    #    print('edge: ', edge)
-    #print the city_graph edges info
-    #for edge in city_graph.edges.data('info'):
-    #    print('edge info: ', edge)
-    #print the city_graph edges length
-    #for edge in city_graph.edges.data('length'):
-    #    print('edge length: ', edge)
-    
+
     #print the names of the nodes in the path
     for node in path:
-        print('Calle: ', city_graph.nodes[node]['name'])
-        print('Línia TMB: ', city_graph.nodes[node]['line'])
+        # check first if name and line exist in the node (g.nodes[node]['name'] and g.nodes[node]['line']])
+        if 'name' in city_graph.nodes[node] and 'line' in city_graph.nodes[node]:
+            print('Calle: ', city_graph.nodes[node]['name'])
+            print('Línia TMB: ', city_graph.nodes[node]['line'])
         
     # Plot the path
     plot_path(city_graph, path, 'path.png')

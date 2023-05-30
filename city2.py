@@ -162,16 +162,18 @@ def find_path(g: CityGraph, dst: Coord, src: Coord) -> List[Coord]:
 
     # Calculate the shortest path in the city graph
     try: 
-        shortest_path_in_city_graph = shortest_path(buses_graph, src_nearest, dst_nearest, weight='length')
+        shortest_path_in_buses_graph = shortest_path(buses_graph, src_nearest, dst_nearest, weight='length')
+        # add src and dst to the path
+        shortest_path_in_buses_graph.insert(0, src)
+        shortest_path_in_buses_graph.append(dst)
     except nx.NetworkXNoPath:
         return []
     #list with nodes such as ['102477', '102474', '100770',...]
     
     # Convert the nodes of the shortest path into coordinates
     #path_as_coordinates = [(g.nodes[node]['y'], g.nodes[node]['x']) for node in shortest_path_in_city_graph]
-    #@GitHub: alexanderbkl
 
-    return shortest_path_in_city_graph
+    return shortest_path_in_buses_graph
 
 def show(g: CityGraph) -> None:
     print('showing graph')
