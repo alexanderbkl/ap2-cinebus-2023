@@ -15,3 +15,4 @@ pip3 install geopy geopandas
 pip3 install scikit-learn
 '''
 
+Descargar e instalar graphviz de https://www.graphviz.org/download/https://www.graphviz.org/download/

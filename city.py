@@ -7,7 +7,6 @@ from haversine import haversine, Unit
 from buses import BusesGraph, get_buses_graph
 from staticmap import StaticMap, Line
 from typing import NamedTuple
-
 OsmnxGraph: TypeAlias = nx.MultiDiGraph
 CityGraph: TypeAlias = nx.Graph
 Coord: TypeAlias = Tuple[float, float]  # (latitude, longitude)

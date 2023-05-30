@@ -7,9 +7,6 @@ from haversine import haversine, Unit
 from typing import List
 #@GitHub: alexanderbkl
 
-def get_buses_graph():
-    return buses.get_buses_graph()
-
 
 def create_billboard():
     return billboard.read()
@@ -37,35 +34,10 @@ def create_city_graph():
 def find_path_to_cinema(city_graph, ox_graph, start_location, cinema_location):
     return city2.find_path(ox_graph, city_graph, start_location, cinema_location)
 
-
-def plot_path(g: city2.CityGraph, p: List[city2.Coord], filename: str) -> None:
-    # Initialize the map
-    m = StaticMap(800, 800)
-
-    # Add markers for nodes and lines for edges in the path
-    for i in range(len(p) - 1):
-        # (longitude, latitude)
-        m.add_marker(CircleMarker((p[i][1], p[i][0]), 'red', 3))
-        #add the 
-        m.add_line(
-            Line([(p[i][1], p[i][0]), (p[i + 1][1], p[i + 1][0])], 'blue', 2))
-
-    # Add a marker for the final destination
-    # (longitude, latitude)
-        
+def plot_path(city_graph, path, filename):
+    return city2.plot_path(city_graph, path, filename)
 
 
-    # Render the image and save it
-    try:
-        m.add_marker(CircleMarker((p[-1][1], p[-1][0]), 'green', 4))
-        image = m.render()
-        image.save(filename)
-    except IndexError:
-        print('No path found')
-        return
-    except Exception as e:
-        #print('Error while plotting path:', e)
-        return
     
 def calculate_time(city_graph, path):
     total_distance = 0.0

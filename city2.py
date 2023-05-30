@@ -11,19 +11,29 @@ from haversine import haversine, Unit
 import matplotlib.pyplot as plt
 from staticmap import StaticMap, CircleMarker, Line
 
-from typing import List
+from typing import List, Union
 
 CityGraph: TypeAlias = nx.Graph
 OsmnxGraph: TypeAlias = nx.MultiDiGraph
 Coord: TypeAlias = Tuple[float, float]  # (latitude, longitude)
-
-        
-        
-#TODO: Define Intersection, Stop, Street, Bus and Path as per your requirements
+EdgeType: TypeAlias = Union["Intersection", "Stop"]
 
 class Edge:
-    # Define this class based on your requirements
-    pass
+    def __init__(self, name: str, distance: float, edge_type: EdgeType):
+        self.name = name
+        self.distance = distance
+        self.type = edge_type
+
+
+class Intersection(Edge):
+    def __init__(self, name: str, distance: float):
+        super().__init__(name, distance, 'intersection')
+
+class Stop(Edge):
+    def __init__(self, name: str, distance: float):
+        super().__init__(name, distance, 'stop')
+
+
 
 def get_osmnx_graph() -> OsmnxGraph:
     filename = 'osmnx_graph.pickle'
@@ -32,14 +42,24 @@ def get_osmnx_graph() -> OsmnxGraph:
         with open(filename, 'rb') as f:
             return pickle.load(f)
 
-    graph = ox.graph_from_place('Barcelona, Spain', network_type='walk')
-    save_osmnx_graph(graph, filename)
+    graph = ox.graph_from_place("Barcelona", network_type='walk', simplify=True)
+    # Iterate over edges to remove geometry and keep the first edge
+    for u, nbrsdict in graph.adjacency():
+        for v, edgesdict in nbrsdict.items():
+            eattr = edgesdict[0]  # First edge attributes
+            if 'geometry' in eattr:
+                del(eattr['geometry'])
 
+    save_osmnx_graph(graph, filename)
     return graph
 
 
-
 def save_osmnx_graph(g: OsmnxGraph, filename: str) -> None:
+    # Remove geometry from all edges before saving to a file
+    for u, v, key, geom in g.edges(data="geometry", keys=True):
+        if geom is not None:
+            del(g[u][v][key]["geometry"])
+
     with open(filename, 'wb') as f:
         pickle.dump(g, f)
 
@@ -48,17 +68,17 @@ def load_osmnx_graph(filename: str) -> OsmnxGraph:
         return pickle.load(f)
 
 def build_city_graph(g1: OsmnxGraph, g2: BusesGraph) -> CityGraph:
-    #print type of g1 and g2
-    #g1 is MultiDiGraph
-    #g2 is Graph
-    #g1_undirected = g1.to_undirected()
+    print('Building city graph...')
+
+    for node in g1.nodes:
+        g1.nodes[node]['type'] = 'intersection'
+        
+    for node in g2.nodes:
+        g2.nodes[node]['type'] = 'stop'
+
+    g2_multigraph = g2.to_undirected()
     
-    #g2_multigraph = nx.MultiGraph(g2)
-    g2_undirected = g2.to_undirected()
-    #create multigraph from g2_undirected
-    g2_multigraph = nx.MultiGraph(g2_undirected)
-    # Create a new graph that is the union of g1 and g2
-    city_graph = nx.compose(g1, g2_multigraph)
+    city_graph: CityGraph = nx.compose(g1, g2_multigraph)
     
 
     # Connect each stop to the nearest intersection
@@ -70,6 +90,7 @@ def build_city_graph(g1: OsmnxGraph, g2: BusesGraph) -> CityGraph:
         #data: {'name': 'Pl de Catalunya', 'line': '100', 'x': 41.386255, 'y': 2.169782}
         i += 1
         if i % 500 == 0:
+            print("test")
             #print(i)
             
         #yx yx yx
@@ -84,8 +105,8 @@ def build_city_graph(g1: OsmnxGraph, g2: BusesGraph) -> CityGraph:
             #print('g1 nodes nearest intersection x: ', g1.nodes[nearest_intersection]['x'])
             
             distance = haversine((data['y'], data['x']), (g1.nodes[nearest_intersection]['x'], g1.nodes[nearest_intersection]['y']))
-            city_graph.add_edge(stop, nearest_intersection, info=[{data['name'], distance, data['line']}], length=distance)
-            city_graph.add_edge(nearest_intersection, stop, info=[{data['name'], distance, data['line']}], length=distance)
+            city_graph.add_edge(stop, nearest_intersection, info=[Edge(data['name'], distance, data['line'])], length=distance)
+            city_graph.add_edge(nearest_intersection, stop, info=[Edge(data['name'], distance, data['line'])], length=distance)
 
     
     print('returned city_graph')
@@ -110,16 +131,23 @@ def get_city_graph() -> CityGraph:
 
 
 
-def find_path(ox_g: OsmnxGraph, g: CityGraph, dst: Coord, src: Coord) -> List[Coord]:
+def find_path(g: CityGraph, ox_g: OsmnxGraph, dst: Coord, src: Coord) -> List[Coord]:
     # Find nearest nodes to the source and destination coordinates in the original osmnx graph
-    dst_nearest = ox.distance.nearest_nodes(ox_g, src[1], src[0])
-    src_nearest = ox.distance.nearest_nodes(ox_g, dst[1], dst[0])
+    #print the first node and edge in g
+    
+    first_node = list(g.nodes(data=True))[0]
+    first_edge = list(g.edges(data=True))[0]
+    print('first_node: ', first_node)
+    print('first_edge: ', first_edge)
+    
+    dst_nearest = ox.distance.nearest_nodes(g, src[1], src[0])
+    src_nearest = ox.distance.nearest_nodes(g, dst[1], dst[0])
     print('src_nearest: ', src_nearest)
     print('dst_nearest: ', dst_nearest)
 
     # Calculate the shortest path in the city graph
     try: 
-        shortest_path_in_city_graph = shortest_path(ox_g, src_nearest, dst_nearest, weight='length')
+        shortest_path_in_city_graph = shortest_path(g, src_nearest, dst_nearest, weight='length')
     except nx.NetworkXNoPath:
         return []
     #list with nodes such as ['102477', '102474', '100770',...]
@@ -132,22 +160,30 @@ def find_path(ox_g: OsmnxGraph, g: CityGraph, dst: Coord, src: Coord) -> List[Co
 
 def show(g: CityGraph) -> None:
     print('showing graph')
-    print('drawing graph')
-    fig, ax = ox.plot_graph(g, node_size=0.5, edge_linewidth=0.5)
 
-    #nx.draw(g, with_labels=False, node_color='skyblue', node_size=15, edge_color='gray')
-    
+    colors = ['green' if data.get('type') == 'street' else 'red' for node, data in g.nodes(data=True)]
+
+    ox.plot_graph(g, node_color=colors, node_size=0.5, edge_linewidth=0.5)
 
 def plot(g: CityGraph, filename: str) -> None:
+    print('plotting city graph', filename)
     m = StaticMap(800, 800)
-    i = 0
     for node in g.nodes:
-        if i % 500 == 0:
-            print('g nodes node x: ', g.nodes[node]['x'])
-        m.add_marker(CircleMarker((g.nodes[node]['x'], g.nodes[node]['y']), 'red', 3))
+        if g.nodes[node]['type'] == 'street':
+            m.add_marker(CircleMarker((g.nodes[node]['x'], g.nodes[node]['y']), 'green', 2))
+        elif g.nodes[node]['type'] == 'buses':
+            m.add_marker(CircleMarker((g.nodes[node]['x'], g.nodes[node]['y']), 'red', 3))
         
     for edge in g.edges:
-        m.add_line(Line([(g.nodes[edge[0]]['x'], g.nodes[edge[0]]['y']), (g.nodes[edge[1]]['x'], g.nodes[edge[1]]['y'])], 'blue', 2))
+        edge_type = g.nodes[edge[0]]['type']
+        if edge_type == 'street':
+            color = 'yellow'
+        elif edge_type == 'buses':
+            color = 'blue'
+        else:
+            color = 'black'  # Default color if type is not defined
+        
+        m.add_line(Line([(g.nodes[edge[0]]['x'], g.nodes[edge[0]]['y']), (g.nodes[edge[1]]['x'], g.nodes[edge[1]]['y'])], color, 1))
     
     image = m.render()
     image.save(filename)
@@ -155,17 +191,36 @@ def plot(g: CityGraph, filename: str) -> None:
     
 
 
-#def plot_path(g: CityGraph, p: Path, filename: str) -> None:
-#    #TODO: Implement this function to display the path on the city map
-#    pass
-if __name__ == '__main__':
-    city_graph = get_city_graph()
-    
-    plot(city_graph, 'city_graph.png')
-    
-    #show(city_graph)
-    
-    
-    
 
-    #TODO: Use the functions as per your requirements
+def plot_path(g: CityGraph, p: List[Coord], filename: str) -> None:
+    # Initialize the map
+    m = StaticMap(800, 800)
+
+    # Add markers for nodes and lines for edges in the path
+    for i in range(len(p) - 1):
+        # (longitude, latitude)
+        m.add_marker(CircleMarker((p[i][1], p[i][0]), 'red', 3))
+        m.add_line(
+            Line([(p[i][1], p[i][0]), (p[i + 1][1], p[i + 1][0])], 'blue', 2))
+
+    # Add a marker for the final destination
+    # (longitude, latitude)
+        
+
+
+    # Render the image and save it
+    try:
+        m.add_marker(CircleMarker((p[-1][1], p[-1][0]), 'green', 4))
+        image = m.render()
+        image.save(filename)
+    except IndexError:
+        print('No path found')
+        return
+    except Exception as e:
+        #print('Error while plotting path:', e)
+        return
+
+#graph = get_city_graph()
+
+#show(graph)
+#plot(graph, 'city_graph.png')
