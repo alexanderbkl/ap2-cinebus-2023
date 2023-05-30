@@ -3,6 +3,7 @@ from networkx.algorithms.shortest_paths.generic import shortest_path
 
 from typing import TypeAlias, Tuple
 import osmnx as ox
+from osmnx import distance
 import pickle
 import os
 from geopy.distance import geodesic
@@ -75,9 +76,11 @@ def build_city_graph(g1: OsmnxGraph, g2: BusesGraph) -> CityGraph:
         
     for node in g2.nodes:
         g2.nodes[node]['type'] = 'stop'
-
-    g2_multigraph = g2.to_undirected()
-    
+    #g2_multigraph = nx.MultiGraph(g2)
+    g2_undirected = g2.to_undirected()
+    #create multigraph from g2_undirected
+    g2_multigraph = nx.MultiGraph(g2_undirected)
+    # Create a new graph that is the union of g1 and g2
     city_graph: CityGraph = nx.compose(g1, g2_multigraph)
     
 
@@ -129,25 +132,33 @@ def get_city_graph() -> CityGraph:
 
     return city_graph
 
+def get_stop_subgraph(g: CityGraph) -> CityGraph:
+    # Get all nodes of type 'stop'
+    stop_nodes = [node for node, data in g.nodes(data=True) if data.get('type') == 'stop']
+    
+    # Create a subgraph from the original graph using only these nodes
+    stop_subgraph = g.subgraph(stop_nodes)
+    
+    return stop_subgraph
 
-
-def find_path(g: CityGraph, ox_g: OsmnxGraph, dst: Coord, src: Coord) -> List[Coord]:
+def find_path(g: CityGraph, dst: Coord, src: Coord) -> List[Coord]:
     # Find nearest nodes to the source and destination coordinates in the original osmnx graph
     #print the first node and edge in g
-    
+    buses_graph = get_buses_graph()
     first_node = list(g.nodes(data=True))[0]
     first_edge = list(g.edges(data=True))[0]
     print('first_node: ', first_node)
     print('first_edge: ', first_edge)
     
-    dst_nearest = ox.distance.nearest_nodes(g, src[1], src[0])
-    src_nearest = ox.distance.nearest_nodes(g, dst[1], dst[0])
+    dst_nearest = distance.nearest_nodes(buses_graph, src[1], src[0])
+    src_nearest = distance.nearest_nodes(buses_graph, dst[1], dst[0])
+    
     print('src_nearest: ', src_nearest)
     print('dst_nearest: ', dst_nearest)
 
     # Calculate the shortest path in the city graph
     try: 
-        shortest_path_in_city_graph = shortest_path(g, src_nearest, dst_nearest, weight='length')
+        shortest_path_in_city_graph = shortest_path(buses_graph, src_nearest, dst_nearest, weight='length')
     except nx.NetworkXNoPath:
         return []
     #list with nodes such as ['102477', '102474', '100770',...]
@@ -161,7 +172,7 @@ def find_path(g: CityGraph, ox_g: OsmnxGraph, dst: Coord, src: Coord) -> List[Co
 def show(g: CityGraph) -> None:
     print('showing graph')
 
-    colors = ['green' if data.get('type') == 'street' else 'red' for node, data in g.nodes(data=True)]
+    colors = ['green' if data.get('type') == 'intersection' else 'red' for node, data in g.nodes(data=True)]
 
     ox.plot_graph(g, node_color=colors, node_size=0.5, edge_linewidth=0.5)
 
@@ -169,16 +180,16 @@ def plot(g: CityGraph, filename: str) -> None:
     print('plotting city graph', filename)
     m = StaticMap(800, 800)
     for node in g.nodes:
-        if g.nodes[node]['type'] == 'street':
+        if g.nodes[node]['type'] == 'intersection':
             m.add_marker(CircleMarker((g.nodes[node]['x'], g.nodes[node]['y']), 'green', 2))
-        elif g.nodes[node]['type'] == 'buses':
+        elif g.nodes[node]['type'] == 'stop':
             m.add_marker(CircleMarker((g.nodes[node]['x'], g.nodes[node]['y']), 'red', 3))
         
     for edge in g.edges:
         edge_type = g.nodes[edge[0]]['type']
-        if edge_type == 'street':
+        if edge_type == 'intersection':
             color = 'yellow'
-        elif edge_type == 'buses':
+        elif edge_type == 'stop':
             color = 'blue'
         else:
             color = 'black'  # Default color if type is not defined
@@ -199,9 +210,10 @@ def plot_path(g: CityGraph, p: List[Coord], filename: str) -> None:
     # Add markers for nodes and lines for edges in the path
     for i in range(len(p) - 1):
         # (longitude, latitude)
-        m.add_marker(CircleMarker((p[i][1], p[i][0]), 'red', 3))
+        
+        m.add_marker(CircleMarker((g.nodes[p[i]]['x'], g.nodes[p[i]]['y']), 'red', 3))
         m.add_line(
-            Line([(p[i][1], p[i][0]), (p[i + 1][1], p[i + 1][0])], 'blue', 2))
+            Line([(g.nodes[p[i]]['x'], g.nodes[p[i]]['y']), (g.nodes[p[i + 1]]['x'], g.nodes[p[i + 1]]['y'])], 'blue', 2))
 
     # Add a marker for the final destination
     # (longitude, latitude)
@@ -210,17 +222,17 @@ def plot_path(g: CityGraph, p: List[Coord], filename: str) -> None:
 
     # Render the image and save it
     try:
-        m.add_marker(CircleMarker((p[-1][1], p[-1][0]), 'green', 4))
+        m.add_marker(CircleMarker((g.nodes[p[-1]]['x'], g.nodes[p[-1]]['y']), 'green', 4))
         image = m.render()
         image.save(filename)
     except IndexError:
         print('No path found')
         return
     except Exception as e:
-        #print('Error while plotting path:', e)
+        print('Error while plotting path:', e)
         return
 
-#graph = get_city_graph()
+graph = get_city_graph()
 
 #show(graph)
-#plot(graph, 'city_graph.png')
+plot(graph, 'city_graph.png')

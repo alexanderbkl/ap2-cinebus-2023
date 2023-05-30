@@ -31,8 +31,8 @@ def create_city_graph():
     return city2.get_city_graph()
 
 
-def find_path_to_cinema(city_graph, ox_graph, start_location, cinema_location):
-    return city2.find_path(ox_graph, city_graph, start_location, cinema_location)
+def find_path_to_cinema(city_graph, start_location, cinema_location):
+    return city2.find_path(city_graph, start_location, cinema_location)
 
 def plot_path(city_graph, path, filename):
     return city2.plot_path(city_graph, path, filename)
@@ -44,6 +44,7 @@ def calculate_time(city_graph, path):
     for i in range(len(path) - 1):
         total_distance += haversine((city_graph.nodes[path[i]]['x'], city_graph.nodes[path[i]]['y']),
                                     (city_graph.nodes[path[i+1]]['x'], city_graph.nodes[path[i+1]]['y']), unit=Unit.KILOMETERS)
+    
     
     speed = 20 / 60  # speed in km/minute
     travel_time = total_distance / speed  # time in minutes
@@ -86,14 +87,12 @@ def main():
     except IndexError:
         print('No matching projections found')
         return
-    path = find_path_to_cinema(
-        city_graph, bus_graph, start_location, cinema_location)
+    path = find_path_to_cinema(city_graph, start_location, cinema_location)
+    
     
     #from the path (['102477', '102474', '100770',...]), we get the coordinates of the nodes
     # Convert the nodes of the shortest path into coordinates
-    path_as_coordinates = [(city_graph.nodes[node]['y'], city_graph.nodes[node]['x']) for node in path]
 
-    print('Path to cinema:', path_as_coordinates)
     time_to_cinema = calculate_time(city_graph, path)
     #time_to_cinema is for example 16.63426
     #if current time plus time to get to the cinema is less than the projection time, we can make it
@@ -132,7 +131,7 @@ def main():
         print('Línia TMB: ', city_graph.nodes[node]['line'])
         
     # Plot the path
-    plot_path(city_graph, path_as_coordinates, 'path.png')
+    plot_path(city_graph, path, 'path.png')
 
 
 if __name__ == '__main__':
