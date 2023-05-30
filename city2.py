@@ -210,22 +210,34 @@ def create_icon(text: str, font_path: str, font_size: int, filename: str):
     text_width, text_height = font.getsize(text)
     img = Image.new('RGBA', (text_width, text_height), (255, 255, 255, 0))
     d = ImageDraw.Draw(img)
-    d.text((0,0), text, font=font, fill=(255,255,255,255))
+    d.text((0, 0), text, font=font, fill=(0, 0, 0, 255))
     img.save(filename)
-
 
 def plot_path(g: CityGraph, p: List[Coord], filename: str) -> None:
     osmnx_g = get_osmnx_graph()
     m = StaticMap(800, 800)
+    
+    # draw icons
+    
+    for i in range(len(p)):
+        # name of the bus stop line
+        line_name = g.nodes[p[i]]['line']
+        icon_path = f"./icons/{line_name}.png"
+        # create icon if it doesn't exist
+        if not os.path.exists(icon_path):
+            create_icon(line_name, "./fonts/Roboto-Black.ttf", 20, icon_path)
+        # calculate offsets, assuming that the average size of an icon is 20x20
+        offset_x = -10 # half the width
+        offset_y = -10 # half the height
 
+        m.add_marker(IconMarker((g.nodes[p[i]]['x'], g.nodes[p[i]]['y']), icon_path, offset_x, offset_y))
+
+
+    #draw lines and markers between bus stops
     for i in range(len(p) - 1):
-        #name of the stop line
-        #g.nodes[p[i]]['line']
+        #add bus red marker
         m.add_marker(CircleMarker((g.nodes[p[i]]['x'], g.nodes[p[i]]['y']), 'red', 10))
 
-        # Shortest path in osmnx graph between current and next node
-        # Ensure you get the shortest path with the proper format (x,y) which can be achieved by using osmnx_g.nodes[node]['y'] and osmnx_g.nodes[node]['x']
-        #g nodes y is 2.20 and x is 41.40
         src_nearest = distance.nearest_nodes(osmnx_g, g.nodes[p[i]]['x'], g.nodes[p[i]]['y'])
         dst_nearest = distance.nearest_nodes(osmnx_g, g.nodes[p[i+1]]['x'], g.nodes[p[i+1]]['y'])
 
@@ -233,7 +245,6 @@ def plot_path(g: CityGraph, p: List[Coord], filename: str) -> None:
         path_as_coordinates_osmnx = [(osmnx_g.nodes[node]['x'], osmnx_g.nodes[node]['y']) for node in shortest_path_osmnx]
         m.add_line(Line(path_as_coordinates_osmnx, 'black', 5))
 
-    # Add a marker for the final destination
     try:
         m.add_marker(CircleMarker((g.nodes[p[-1]]['x'], g.nodes[p[-1]]['y']), 'green', 10))
         image = m.render()
