@@ -31,9 +31,18 @@ class Intersection(Edge):
     def __init__(self, name: str, distance: float):
         super().__init__(name, distance, 'intersection')
 
+
 class Stop(Edge):
     def __init__(self, name: str, distance: float):
         super().__init__(name, distance, 'stop')
+
+
+class Path:
+    def __init__(self,x, y, node, type):
+        self.x = x
+        self.y = y
+        self.node = node
+        self.type = type
 
 
 
@@ -84,34 +93,6 @@ def build_city_graph(g1: OsmnxGraph, g2: BusesGraph) -> CityGraph:
     # Create a new graph that is the union of g1 and g2
     city_graph: CityGraph = nx.compose(g1, g2_multigraph)
     
-
-    # Connect each stop to the nearest intersection
-    i = 0
-    #get number of nodes in g2
-    num_nodes = g2.number_of_nodes()
-    print('num_nodes: ', num_nodes)
-    for stop, data in g2.nodes(data=True):
-        #data: {'name': 'Pl de Catalunya', 'line': '100', 'x': 41.386255, 'y': 2.169782}
-        i += 1
-        if i % 500 == 0:
-            print("test")
-            #print(i)
-            
-        #yx yx yx
-        #xy yx yx
-        #yx xy yx
-        #xy xy yx
-        #yx 
-        # x from graph in osmnx is longitude
-            #print('datax: ', data['x'])
-        # Estimate distance as bird's-eye distance
-            nearest_intersection = ox.distance.nearest_nodes(g1, data['x'], data['y'])
-            #print('g1 nodes nearest intersection x: ', g1.nodes[nearest_intersection]['x'])
-            
-            distance = haversine((data['y'], data['x']), (g1.nodes[nearest_intersection]['x'], g1.nodes[nearest_intersection]['y']))
-            city_graph.add_edge(stop, nearest_intersection, info=[Edge(data['name'], distance, data['line'])], length=distance)
-            city_graph.add_edge(nearest_intersection, stop, info=[Edge(data['name'], distance, data['line'])], length=distance)
-
     
     print('returned city_graph')
     
@@ -151,7 +132,7 @@ def get_intersection_subgraph(g: CityGraph) -> CityGraph:
     
     return intersection_subgraph
 
-def find_path(g: CityGraph, dst: Coord, src: Coord) -> List[Coord]:
+def find_path(g: CityGraph, dst: Coord, src: Coord) -> List[Path]:
     # Find nearest nodes to the source and destination coordinates in the original osmnx graph
     #print the first node and edge in g
     buses_graph = get_buses_graph()
@@ -159,13 +140,18 @@ def find_path(g: CityGraph, dst: Coord, src: Coord) -> List[Coord]:
     dst_nearest = distance.nearest_nodes(buses_graph, src[1], src[0])
     src_nearest = distance.nearest_nodes(buses_graph, dst[1], dst[0])
     
-
+    print("buses first node nearest type:")
+    print(buses_graph.nodes[dst_nearest])
     # Calculate the shortest path in the city graph
-    try: 
-        shortest_path_in_buses_graph = shortest_path(buses_graph, src_nearest, dst_nearest, weight='length')
+    try:
+        
+        shortest_path_nodes: List[Path] = shortest_path(buses_graph, src_nearest, dst_nearest, weight='length')
+        
+        shortest_path_in_buses_graph: List[Path] = [Path(node, 'stop') for node in shortest_path_nodes]
+
         # add src and dst to the path
-        shortest_path_in_buses_graph.insert(0, src)
-        shortest_path_in_buses_graph.append(dst)
+        #shortest_path_in_buses_graph.insert(0, src)
+        #shortest_path_in_buses_graph.append(dst)
     except nx.NetworkXNoPath:
         return []
     #list with nodes such as ['102477', '102474', '100770',...]
@@ -212,43 +198,65 @@ def create_icon(text: str, font_path: str, font_size: int, filename: str):
     text_width, text_height = font.getsize(text)
     img = Image.new('RGBA', (text_width, text_height), (255, 255, 255, 0))
     d = ImageDraw.Draw(img)
-    d.text((0, 0), text, font=font, fill=(0, 0, 0, 255))
+    d.text((0, 0), text, font=font, fill=(122, 122, 122, 255))
     img.save(filename)
 
-def plot_path(g: CityGraph, p: List[Coord], filename: str) -> None:
+def plot_path(g: CityGraph, p: List[Path], filename: str) -> None:
     osmnx_g = get_osmnx_graph()
     m = StaticMap(800, 800)
     
     # draw icons
     
     for i in range(len(p)):
-        # name of the bus stop line
-        line_name = g.nodes[p[i]]['line']
-        icon_path = f"./icons/{line_name}.png"
-        # create icon if it doesn't exist
-        if not os.path.exists(icon_path):
-            create_icon(line_name, "./fonts/Roboto-Black.ttf", 20, icon_path)
-        # calculate offsets, assuming that the average size of an icon is 20x20
-        offset_x = -10 # half the width
-        offset_y = -10 # half the height
+        if p[i].type == 'stop':
+            # name of the bus stop line
+            line_name = g.nodes[p[i].node]['line']
+            icon_path = f"./icons/{line_name}.png"
+            # create icon if it doesn't exist
+            if not os.path.exists(icon_path):
+                create_icon(line_name, "./fonts/Roboto-Black.ttf", 20, icon_path)
+            # calculate offsets, assuming that the average size of an icon is 20x20
+            offset_x = -10 # half the width
+            offset_y = -10 # half the height
 
-        m.add_marker(IconMarker((g.nodes[p[i]]['x'], g.nodes[p[i]]['y']), icon_path, offset_x, offset_y))
+            m.add_marker(IconMarker((g.nodes[p[i].node]['x'], g.nodes[p[i].node]['y']), icon_path, offset_x, offset_y))
+    print('showing path', p)
 
-
+    #g nodes {'name': 'Gran Via Corts Catalanes, 1132-1142', 'line': 'N2', 'y': 41.417631, 'x': 2.206185, 'type': 'stop'}  
     #draw lines and markers between bus stops
+    
+    current_line: str
+    next_line: str
     for i in range(len(p) - 1):
         #add bus red marker
-        m.add_marker(CircleMarker((g.nodes[p[i]]['x'], g.nodes[p[i]]['y']), 'red', 10))
+        if p[i].type == 'stop':
+            current_line = g.nodes[p[i].node]['line']
+            next_line = g.nodes[p[i+1]]['line']
+        
+            src_nearest = distance.nearest_nodes(osmnx_g, g.nodes[p[i]]['x'], g.nodes[p[i]]['y'])
+            dst_nearest = distance.nearest_nodes(osmnx_g, g.nodes[p[i+1]]['x'], g.nodes[p[i+1]]['y'])
 
-        src_nearest = distance.nearest_nodes(osmnx_g, g.nodes[p[i]]['x'], g.nodes[p[i]]['y'])
-        dst_nearest = distance.nearest_nodes(osmnx_g, g.nodes[p[i+1]]['x'], g.nodes[p[i+1]]['y'])
+            shortest_path_osmnx: (list | dict) = shortest_path(osmnx_g, src_nearest, dst_nearest, weight='length')
+        
+        
+        
+            path_as_coordinates_osmnx = [(osmnx_g.nodes[node]['x'], osmnx_g.nodes[node]['y']) for node in shortest_path_osmnx]
+        
+        
+            #if current line and next line is different, print walking. if not, print bus
+            if current_line != next_line:
+                print("walking")
+                m.add_line(Line(path_as_coordinates_osmnx, 'blue', 5))
 
-        shortest_path_osmnx = shortest_path(osmnx_g, src_nearest, dst_nearest, weight='length')
-        path_as_coordinates_osmnx = [(osmnx_g.nodes[node]['x'], osmnx_g.nodes[node]['y']) for node in shortest_path_osmnx]
-        m.add_line(Line(path_as_coordinates_osmnx, 'black', 5))
+            else:
+                print("bus")
+                m.add_line(Line(path_as_coordinates_osmnx, 'red', 10))
+
+            m.add_marker(CircleMarker((g.nodes[p[i]]['x'], g.nodes[p[i]]['y']), 'black', 15))
+
 
     try:
-        m.add_marker(CircleMarker((g.nodes[p[-1]]['x'], g.nodes[p[-1]]['y']), 'green', 10))
+        m.add_marker(CircleMarker((g.nodes[p[-1]]['x'], g.nodes[p[-1]]['y']), 'green', 15))
         image = m.render()
         image.save(filename)
     except IndexError:
