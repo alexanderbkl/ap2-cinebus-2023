@@ -134,13 +134,13 @@ def get_intersection_subgraph(g: CityGraph) -> CityGraph:
     
     return intersection_subgraph
 
-def find_path(g: CityGraph, dst: Coord, src: Coord) -> List[Path]:
+def find_path(g: CityGraph, src: Coord, dst: Coord) -> List[Path]:
     # Find nearest nodes to the source and destination coordinates in the original osmnx graph
     #print the first node and edge in g
     buses_graph = get_buses_graph()
     
-    dst_nearest = distance.nearest_nodes(buses_graph, src[1], src[0])
-    src_nearest = distance.nearest_nodes(buses_graph, dst[1], dst[0])
+    dst_nearest = distance.nearest_nodes(buses_graph, dst[1], dst[0])
+    src_nearest = distance.nearest_nodes(buses_graph, src[1], src[0])
     
     print("buses first node nearest type:")
     #{'name': 'Andreu Nin, 1-7', 'line': '11', 'y': 41.4325, 'x': 2.180897}
@@ -208,13 +208,19 @@ def create_icon(text: str, font_path: str, font_size: int, filename: str):
     d.text((0, 0), text, font=font, fill=(122, 122, 122, 255))
     img.save(filename)
 
+
+# Method for calculating the travel time
+def calculate_travel_time(distance_in_km, speed_in_km_h):
+    time_in_hours = distance_in_km / speed_in_km_h
+    time_in_minutes = time_in_hours * 60
+    return time_in_minutes
+
 def plot_path(g: CityGraph, p: List[Path], filename: str) -> None:
     osmnx_g = get_osmnx_graph()
     m = StaticMap(800, 800)
     
-    # draw icons
-    print('showing path', p)
-    
+    bus_speed = 20  # km/h
+    walking_speed = 1.4  # km/h
     
     stop_paths = []
     intersection_paths = []
@@ -225,7 +231,25 @@ def plot_path(g: CityGraph, p: List[Path], filename: str) -> None:
             stop_paths.append(path)
         elif path.type == 'intersection':
             intersection_paths.append(path)
+            
+    # for each intersectio, print the intersection
+    for intersection in intersection_paths:
+        print("intersection x: ", intersection.x, " y: ", intersection.y)
+        print("intersection type: ", intersection.type)
+    
+    # Draw line from start point to first bus stop
+    src_nearest = distance.nearest_nodes(osmnx_g, intersection_paths[0].x, intersection_paths[0].y)
+    dst_nearest = distance.nearest_nodes(osmnx_g, g.nodes[stop_paths[0].node]['x'], g.nodes[stop_paths[0].node]['y'])
+    shortest_path_osmnx_start = shortest_path(osmnx_g, src_nearest, dst_nearest, weight='length')
+    path_as_coordinates_osmnx_start = [(osmnx_g.nodes[node]['x'], osmnx_g.nodes[node]['y']) for node in shortest_path_osmnx_start]
+    m.add_line(Line(path_as_coordinates_osmnx_start, 'blue', 5))
+    #add marker to the start point (paths_as_coordinates_osmnx_start[0])
+    m.add_marker(CircleMarker((path_as_coordinates_osmnx_start[0][0], path_as_coordinates_osmnx_start[0][1]), 'green', 15))
 
+    
+    print("intersections: ", intersection_paths)
+    #intersections:  [<city2.Path object at 0x000001D2AAC2E590>, <city2.Path object at 0x000001D2AAC2F160>]
+    # draw icons
     for i in range(len(stop_paths)):
         # name of the bus stop line
         line_name = g.nodes[stop_paths[i].node]['line']
@@ -246,7 +270,7 @@ def plot_path(g: CityGraph, p: List[Path], filename: str) -> None:
     next_line: str
     last_bus_node: int = stop_paths[-1].node
 
-    
+    total_time = 0
     for i in range(len(stop_paths) - 1):
         #add bus red marker
         current_bus_node = stop_paths[i].node
@@ -254,28 +278,51 @@ def plot_path(g: CityGraph, p: List[Path], filename: str) -> None:
         
         current_line = g.nodes[current_bus_node]['line']
         next_line = g.nodes[next_bus_node]['line']
-    
+
+        coord1 = (g.nodes[current_bus_node]['x'], g.nodes[current_bus_node]['y'])
+        coord2 = (g.nodes[next_bus_node]['x'], g.nodes[next_bus_node]['y'])
+        distance_in_km = haversine(coord1, coord2)
+
         src_nearest = distance.nearest_nodes(osmnx_g, g.nodes[current_bus_node]['x'], g.nodes[current_bus_node]['y'])
         dst_nearest = distance.nearest_nodes(osmnx_g, g.nodes[next_bus_node]['x'], g.nodes[next_bus_node]['y'])
 
         shortest_path_osmnx: (list | dict) = shortest_path(osmnx_g, src_nearest, dst_nearest, weight='length')
-    
-    
-    
+
         path_as_coordinates_osmnx = [(osmnx_g.nodes[node]['x'], osmnx_g.nodes[node]['y']) for node in shortest_path_osmnx]
-    
-    
+
+
         #if current line and next line is different, print walking. if not, print bus
         if current_line != next_line:
             print("walking")
-            m.add_line(Line(path_as_coordinates_osmnx, 'blue', 5))
+            walking_time = calculate_travel_time(distance_in_km, walking_speed)
+            print(f"Travel time: {walking_time} minutes")
+            total_time += walking_time
+            
+            m.add_line(Line(path_as_coordinates_osmnx, 'blue', 10))
 
         else:
             print("bus")
+            bus_time = calculate_travel_time(distance_in_km, bus_speed)
             m.add_line(Line(path_as_coordinates_osmnx, 'red', 10))
-
+            total_time += bus_time
+            print(f"Travel time: {bus_time} minutes")
         m.add_marker(CircleMarker((g.nodes[current_bus_node]['x'], g.nodes[current_bus_node]['y']), 'black', 15))
 
+
+    # Draw line from last bus stop to end point
+    src_nearest = distance.nearest_nodes(osmnx_g, g.nodes[stop_paths[-1].node]['x'], g.nodes[stop_paths[-1].node]['y'])
+    #print coordinates of last bus stop
+    print("last bus stop: ", g.nodes[stop_paths[-1].node]['x'], g.nodes[stop_paths[-1].node]['y'])
+    dst_nearest = distance.nearest_nodes(osmnx_g, intersection_paths[-1].x, intersection_paths[-1].y)
+    #print coordinates of last intersection
+    print("last intersection: ", intersection_paths[-1].x, intersection_paths[-1].y)
+    
+    shortest_path_osmnx_end = shortest_path(osmnx_g, src_nearest, dst_nearest, weight='length')
+    path_as_coordinates_osmnx_end = [(osmnx_g.nodes[node]['x'], osmnx_g.nodes[node]['y']) for node in shortest_path_osmnx_end]
+    m.add_line(Line(path_as_coordinates_osmnx_end, 'blue', 5))
+
+    # Print the total time
+    print(f"Total time: {total_time} minutes")
 
     try:
         m.add_marker(CircleMarker((g.nodes[last_bus_node]['x'], g.nodes[last_bus_node]['y']), 'green', 15))
