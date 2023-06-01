@@ -39,11 +39,13 @@ class Stop(Edge):
 
 class Path:
     def __init__(self,x, y, node, type):
-        self.x = x
-        self.y = y
-        self.node = node
-        self.type = type
-
+        if type == 'intersection':
+            self.x = x
+            self.y = y
+            self.type = type
+        else:
+            self.node = node
+            self.type = type
 
 
 def get_osmnx_graph() -> OsmnxGraph:
@@ -141,17 +143,22 @@ def find_path(g: CityGraph, dst: Coord, src: Coord) -> List[Path]:
     src_nearest = distance.nearest_nodes(buses_graph, dst[1], dst[0])
     
     print("buses first node nearest type:")
-    print(buses_graph.nodes[dst_nearest])
+    #{'name': 'Andreu Nin, 1-7', 'line': '11', 'y': 41.4325, 'x': 2.180897}
+    
     # Calculate the shortest path in the city graph
     try:
         
-        shortest_path_nodes: List[Path] = shortest_path(buses_graph, src_nearest, dst_nearest, weight='length')
+        shortest_path_nodes: List = shortest_path(buses_graph, src_nearest, dst_nearest, weight='length')
         
-        shortest_path_in_buses_graph: List[Path] = [Path(node, 'stop') for node in shortest_path_nodes]
+        shortest_path_list: List[Path] = [Path(buses_graph.nodes[node]['x'], buses_graph.nodes[node]['y'], node, 'stop') for node in shortest_path_nodes]
+        
+        
+        #push at the beginning of the path the src and type is intersection
+        shortest_path_list.insert(0, Path(src[1], src[0], 0, 'intersection'))
+        #push at the end of the path the dst and type is intersection
+        shortest_path_list.append(Path(dst[1], dst[0], 0, 'intersection'))
 
-        # add src and dst to the path
-        #shortest_path_in_buses_graph.insert(0, src)
-        #shortest_path_in_buses_graph.append(dst)
+
     except nx.NetworkXNoPath:
         return []
     #list with nodes such as ['102477', '102474', '100770',...]
@@ -159,7 +166,7 @@ def find_path(g: CityGraph, dst: Coord, src: Coord) -> List[Path]:
     # Convert the nodes of the shortest path into coordinates
     #path_as_coordinates = [(g.nodes[node]['y'], g.nodes[node]['x']) for node in shortest_path_in_city_graph]
 
-    return shortest_path_in_buses_graph
+    return shortest_path_list
 
 def show(g: CityGraph) -> None:
     print('showing graph')
@@ -206,57 +213,72 @@ def plot_path(g: CityGraph, p: List[Path], filename: str) -> None:
     m = StaticMap(800, 800)
     
     # draw icons
-    
-    for i in range(len(p)):
-        if p[i].type == 'stop':
-            # name of the bus stop line
-            line_name = g.nodes[p[i].node]['line']
-            icon_path = f"./icons/{line_name}.png"
-            # create icon if it doesn't exist
-            if not os.path.exists(icon_path):
-                create_icon(line_name, "./fonts/Roboto-Black.ttf", 20, icon_path)
-            # calculate offsets, assuming that the average size of an icon is 20x20
-            offset_x = -10 # half the width
-            offset_y = -10 # half the height
-
-            m.add_marker(IconMarker((g.nodes[p[i].node]['x'], g.nodes[p[i].node]['y']), icon_path, offset_x, offset_y))
     print('showing path', p)
+    
+    
+    stop_paths = []
+    intersection_paths = []
+
+    # Separate the paths into their respective lists
+    for path in p:
+        if path.type == 'stop':
+            stop_paths.append(path)
+        elif path.type == 'intersection':
+            intersection_paths.append(path)
+
+    for i in range(len(stop_paths)):
+        # name of the bus stop line
+        line_name = g.nodes[stop_paths[i].node]['line']
+        icon_path = f"./icons/{line_name}.png"
+        # create icon if it doesn't exist
+        if not os.path.exists(icon_path):
+            create_icon(line_name, "./fonts/Roboto-Black.ttf", 20, icon_path)
+        # calculate offsets, assuming that the average size of an icon is 20x20
+        offset_x = -10 # half the width
+        offset_y = -10 # half the height
+
+        m.add_marker(IconMarker((g.nodes[stop_paths[i].node]['x'], g.nodes[stop_paths[i].node]['y']), icon_path, offset_x, offset_y))
 
     #g nodes {'name': 'Gran Via Corts Catalanes, 1132-1142', 'line': 'N2', 'y': 41.417631, 'x': 2.206185, 'type': 'stop'}  
     #draw lines and markers between bus stops
     
     current_line: str
     next_line: str
-    for i in range(len(p) - 1):
+    last_bus_node: int = stop_paths[-1].node
+
+    
+    for i in range(len(stop_paths) - 1):
         #add bus red marker
-        if p[i].type == 'stop':
-            current_line = g.nodes[p[i].node]['line']
-            next_line = g.nodes[p[i+1]]['line']
+        current_bus_node = stop_paths[i].node
+        next_bus_node = stop_paths[i+1].node
         
-            src_nearest = distance.nearest_nodes(osmnx_g, g.nodes[p[i]]['x'], g.nodes[p[i]]['y'])
-            dst_nearest = distance.nearest_nodes(osmnx_g, g.nodes[p[i+1]]['x'], g.nodes[p[i+1]]['y'])
+        current_line = g.nodes[current_bus_node]['line']
+        next_line = g.nodes[next_bus_node]['line']
+    
+        src_nearest = distance.nearest_nodes(osmnx_g, g.nodes[current_bus_node]['x'], g.nodes[current_bus_node]['y'])
+        dst_nearest = distance.nearest_nodes(osmnx_g, g.nodes[next_bus_node]['x'], g.nodes[next_bus_node]['y'])
 
-            shortest_path_osmnx: (list | dict) = shortest_path(osmnx_g, src_nearest, dst_nearest, weight='length')
-        
-        
-        
-            path_as_coordinates_osmnx = [(osmnx_g.nodes[node]['x'], osmnx_g.nodes[node]['y']) for node in shortest_path_osmnx]
-        
-        
-            #if current line and next line is different, print walking. if not, print bus
-            if current_line != next_line:
-                print("walking")
-                m.add_line(Line(path_as_coordinates_osmnx, 'blue', 5))
+        shortest_path_osmnx: (list | dict) = shortest_path(osmnx_g, src_nearest, dst_nearest, weight='length')
+    
+    
+    
+        path_as_coordinates_osmnx = [(osmnx_g.nodes[node]['x'], osmnx_g.nodes[node]['y']) for node in shortest_path_osmnx]
+    
+    
+        #if current line and next line is different, print walking. if not, print bus
+        if current_line != next_line:
+            print("walking")
+            m.add_line(Line(path_as_coordinates_osmnx, 'blue', 5))
 
-            else:
-                print("bus")
-                m.add_line(Line(path_as_coordinates_osmnx, 'red', 10))
+        else:
+            print("bus")
+            m.add_line(Line(path_as_coordinates_osmnx, 'red', 10))
 
-            m.add_marker(CircleMarker((g.nodes[p[i]]['x'], g.nodes[p[i]]['y']), 'black', 15))
+        m.add_marker(CircleMarker((g.nodes[current_bus_node]['x'], g.nodes[current_bus_node]['y']), 'black', 15))
 
 
     try:
-        m.add_marker(CircleMarker((g.nodes[p[-1]]['x'], g.nodes[p[-1]]['y']), 'green', 15))
+        m.add_marker(CircleMarker((g.nodes[last_bus_node]['x'], g.nodes[last_bus_node]['y']), 'green', 15))
         image = m.render()
         image.save(filename)
     except IndexError:

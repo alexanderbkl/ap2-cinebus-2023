@@ -94,13 +94,7 @@ def main():
     except IndexError:
         print('No matching projections found')
         return
-    path: List[Path] = find_path_to_cinema(city_graph, start_location, cinema_location)
-    
-    #push at the beginning of the path the start_location and type is intersection
-    path.insert(0, Path(start_location, 'intersection'))
-    #push at the end of the path the cinema_location and type is intersection
-    path.append(Path(cinema_location, 'intersection'))
-    
+    path: List[Path] = find_path_to_cinema(city_graph, start_location, cinema_location)    
     
     
     
