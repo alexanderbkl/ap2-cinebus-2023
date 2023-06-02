@@ -126,45 +126,54 @@ def read() -> Billboard:
 
     div = soup.find("div", id="col_content")
     
-    for filmDiv in div.find_all("div", class_="margin_10b j_entity_container"):
-        name_h2 = filmDiv.find("h2", class_="tt_18")
+    cinema_divs = div.find_all("div", class_="margin_10b j_entity_container")
+    movie_divs = div.find_all("div", class_="j_w j_tabs")
+
+    for cinemaDiv, movieDiv in zip(cinema_divs, movie_divs):
+        name_h2 = cinemaDiv.find("h2", class_="tt_18")
         cine_name = name_h2.a.text.strip()
-        address_span = filmDiv.find_all("span", class_="lighten")[1]
+        address_span = cinemaDiv.find_all("span", class_="lighten")[1]
         cine_address = address_span.text.strip()
         latitude, longitude = get_lat_long(cine_address)
         cine_address = Address(latitude, longitude, cine_address)
         cinema = Cinema(cine_name, cine_address)
         cinemas.append(cinema)
-        
-    for moviesDiv in div.find_all("div", class_="j_w j_tabs"):
-        tabs_box_panels = moviesDiv.find("div", class_="tabs_box_panels")
-        tabs_box = tabs_box_panels.find("div", class_="tabs_box_pan item-0")
 
-        for item_resa in tabs_box.find_all("div", class_="item_resa"):
-            div_j_w = item_resa.find("div", class_="j_w")
-            if div_j_w.find("a", class_="underline") is None:
-                continue
-            data_movie = div_j_w["data-movie"]
-            
-            ulHours = item_resa.find("ul", class_="list_hours")
-            hours = []
-            for li in ulHours.find_all("li"):
-                hours.append(li.em.text.strip())
-            
-            language = "ES"
-            movie_data = json.loads(data_movie)
-            
-            film_title = movie_data["title"]
-            genre = movie_data["genre"]
-            director = movie_data["directors"][0]
-            actors = movie_data["actors"]
-            
-            film = Film(film_title, genre, director, actors)
-            films.append(film)
-            
-            for hour in hours:
-                # assuming time is in "HH:MM" format
-                time_tuple = tuple(map(int, hour.split(':')))
-                projections.append(Projection(film, cinema, time_tuple, language))
-                
+        tabs_box_panels = movieDiv.find("div", class_="tabs_box_panels")
+        tabs_box = tabs_box_panels.find("div", class_="tabs_box_pan item-0") if tabs_box_panels else None
+        if tabs_box:
+                for item_resa in tabs_box.find_all("div", class_="item_resa"):
+                    div_j_w = item_resa.find("div", class_="j_w")
+                    if div_j_w.find("a", class_="underline") is None:
+                        continue
+                    data_movie = div_j_w["data-movie"]
+                    
+                    ulHours = item_resa.find("ul", class_="list_hours")
+                    hours = []
+                    for li in ulHours.find_all("li"):
+                        hours.append(li.em.text.strip())
+                    
+                    language = "ES"
+                    movie_data = json.loads(data_movie)
+                    
+                    film_title = movie_data["title"]
+                    genre = movie_data["genre"]
+                    director = movie_data["directors"][0]
+                    actors = movie_data["actors"]
+                    
+                    film = Film(film_title, genre, director, actors)
+                    films.append(film)
+                    
+                    for hour in hours:
+                        # assuming time is in "HH:MM" format
+                        hour_str, minute_str = hour.split(':')
+                        #if minute is 0, add another 0
+                        if minute_str == "0":
+                            minute_str = "00"
+                        time_tuple = (hour_str, minute_str)
+                        projections.append(Projection(film, cinema, time_tuple, language))
+        else:
+            continue
+    
+    
     return Billboard(films, cinemas, projections)

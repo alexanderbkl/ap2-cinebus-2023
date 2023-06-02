@@ -2,9 +2,11 @@ from datetime import datetime
 from staticmap import StaticMap, CircleMarker, Line
 import billboard
 import buses
-import city2
+import city
 from haversine import haversine, Unit
 from typing import List
+import datetime
+import osmnx as ox
 #@GitHub: alexanderbkl
 
 
@@ -28,34 +30,38 @@ def search_billboard(billboard, keyword):
 
 
 def create_city_graph():
-    return city2.get_city_graph()
+    return city.get_city_graph()
 
 
 def find_path_to_cinema(city_graph, start_location, cinema_location):
-    return city2.find_path(city_graph, start_location, cinema_location)
+    return city.find_path(city_graph, start_location, cinema_location)
 
 def plot_path(city_graph, path, filename):
-    return city2.plot_path(city_graph, path, filename)
+    return city.plot_path(city_graph, path, filename)
 
-
-    
-def calculate_time(city_graph, path):
-    #path:  [(41.43264617346267, 2.1817424582716707), '000888', '000962', '002683', '000971', '009817', '003505', '003506', '000965', '000454', '000409', '001351', '001339', '002915', '002914', (41.41749, 2.205378)]
-    total_distance = 0.0
-    for i in range(len(path) - 1):
-
-        
-
-        total_distance += haversine((city_graph.nodes[path[i]]['x'], city_graph.nodes[path[i]]['y']),
-                                    (city_graph.nodes[path[i+1]]['x'], city_graph.nodes[path[i+1]]['y']), unit=Unit.KILOMETERS)
-    
-    
-    speed = 20 / 60  # speed in km/minute
-    travel_time = total_distance / speed  # time in minutes
-    return travel_time
 
 def Path(node, type):
-    return city2.Path(node, type)
+    return city.Path(node, type)
+
+def get_lat_long(address):
+    try:
+        result = ox.geocode(address)
+        if isinstance(result, tuple):
+            latitude = result[0]
+            longitude = result[1]
+        else:
+            latitude = result.y
+            longitude = result.x
+        return latitude, longitude
+    except ox.errors.GeocoderQueryError:
+        print(f"Unable to geocode the address '{address}'. Please enter a different address.")
+        return None, None
+    except Exception as e:
+        # Handle any other exceptions that may occur during geocoding
+        print(f"Error geocoding address '{address}': {e}")
+        return None, None
+
+
 
 def main():
     print("Author: Alexander Baikálov")
@@ -68,7 +74,8 @@ def main():
     matching_projections = search_billboard(billboard, keyword)
     print('Matching projections:')
     for projection in matching_projections:
-        print(projection.film.title)
+        #print formatted projection film title and cinema name
+        print(projection.film.title + ' - ' + projection.cinema.name)
 
     bus_graph = buses.get_buses_graph()
     # print("Showing bus graph...")
@@ -81,10 +88,14 @@ def main():
     #print("Showing city graph...")
     #city2.show(city_graph)
 
-    # start_location = input('Enter your current location as latitude,longitude: ')
-    # start_location = tuple(map(float, start_location.split(',')))
-    # 41.43562334333733, 2.230975455414895
-    start_location = (41.417490, 2.205378)
+    address = input('Introduïr adreça (Ex: Carrer de Perpinyà, 29, Barcelona): ')
+    start_location = None
+    
+    while start_location is None:
+        start_location = get_lat_long(address)
+        if start_location is None:
+            address = input('No s\'ha trobat l\'adreça, intruduïr una altra: ')
+    #start_location = (41.377490, 2.205378)
 
     # finding the cinema with the earliest projection
     matching_projections.sort(key=lambda p: p.time)
@@ -97,25 +108,13 @@ def main():
     path: List[Path] = find_path_to_cinema(city_graph, start_location, cinema_location)    
     
     
-    
-    #from the path (['102477', '102474', '100770',...]), we get the coordinates of the nodes
-    # Convert the nodes of the shortest path into coordinates
-
-    #time_to_cinema = calculate_time(city_graph, path)
-    #time_to_cinema is for example 16.63426
-    #if current time plus time to get to the cinema is less than the projection time, we can make it
         
-    #round time to cinema to 2 decimals
-    #time_to_cinema = round(time_to_cinema, 0)
-    projection_time = matching_projections[0].time[0] * 60 + matching_projections[0].time[1]
+    projection_time = matching_projections[0].time
     
     #print(f'Time to get to the cinema: {time_to_cinema} minutes')
 
     #now = datetime.now()
     #current_time_in_minutes = now.hour * 60 + now.minute
-    
-    #print(f'Current time in minutes: {current_time_in_minutes}')
-    print(f'Projection time in minutes: {projection_time}')
 
     #if current_time_in_minutes + time_to_cinema < projection_time:
     #    print("You can make it to the cinema in time for the projection!")
@@ -124,16 +123,59 @@ def main():
     #projection_time is f.e. 1345 (hhmm)
 
 
-    #print the names of the nodes in the path
-    #for node in path:
-    #    # check first if name and line exist in the node (g.nodes[node]['name'] and g.nodes[node]['line']])
-    #    if 'name' in city_graph.nodes[node] and 'line' in city_graph.nodes[node]:
-    #        print('Calle: ', city_graph.nodes[node]['name'])
-    #        print('Línia TMB: ', city_graph.nodes[node]['line'])
-        
-    # Plot the path
-    plot_path(city_graph, path, 'path.png')
 
+    
+    
+
+    # Variable to keep track of the current line
+    current_line = ''
+
+    # Iterate over the nodes in the path
+    for i in path:
+        if i.type != 'intersection':
+            # Check first if name and line exist in the node (g.nodes[node]['name'] and g.nodes[node]['line']])
+            if 'name' in city_graph.nodes[i.node] and 'line' in city_graph.nodes[i.node]:
+                new_line = city_graph.nodes[i.node]['line']
+                # If this line is different from the previous one, print it along with the street
+                if new_line != current_line:
+                    print(f'Línia TMB: {new_line} Carrer: {city_graph.nodes[i.node]["name"]}')
+                    current_line = new_line
+    
+    
+
+    # Convert projection_time to 'hh:mm' format and print
+    projection_time = matching_projections[0].time
+    projection_time_formatted = ":".join(projection_time)
+
+    print(f'Hora de la projecció : {projection_time_formatted}')
+
+    # Get the current time
+    current_time = datetime.datetime.now().time()
+
+    #travel_time is a string in format hh:mm
+    travel_time = plot_path(city_graph, path, "path.png")
+    print(f'Temps de viatge: {travel_time} hores')
+    
+    hours_travel, minutes_travel = map(int, travel_time.split(":"))
+    
+    # Convert current_time to a datetime.datetime object
+    current_datetime = datetime.datetime.combine(datetime.date.today(), current_time)
+    
+    
+    # Calculate the arrival time by adding the travel time
+    arrival_datetime = current_datetime + datetime.timedelta(hours=hours_travel, minutes=minutes_travel)
+    arrival_time = arrival_datetime.time()
+
+
+    # Convert projection_time_formatted back to datetime.time
+    projection_time = datetime.datetime.strptime(projection_time_formatted, "%H:%M").time()
+
+    # Compare the arrival time with the projection time
+    if arrival_time < projection_time:
+        print("Arribaràs a temps a la projecció!")
+    else:
+        print("No podràs arribar a temps.")
+    
 
 if __name__ == '__main__':
     main()
