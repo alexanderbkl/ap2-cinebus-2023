@@ -90,7 +90,7 @@ def main():
     # city2.show(city_graph)
 
     address = input(
-        'Introduïr adreça (Ex: Carrer de Perpinyà, 29, Barcelona): ')
+        'Introduïr adreça (Ex: Av. Diagonal, 250, Barcelona): ')
     start_location = None
 
     while start_location is None:

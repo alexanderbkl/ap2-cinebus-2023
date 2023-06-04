@@ -10,6 +10,7 @@ from geopy.geocoders import Nominatim
 
 @dataclass
 class Address:
+    """Represents an address with its latitude, longitude, and street name."""
     latitude: float
     longitude: float
     street: str
@@ -17,6 +18,7 @@ class Address:
 
 @dataclass
 class Film:
+    """Represents a film with its title, genre, director, and a list of actors."""
     title: str
     genre: str
     director: str
@@ -25,12 +27,14 @@ class Film:
 
 @dataclass
 class Cinema:
+    """Represents a cinema with its name and address."""
     name: str
     address: Address
 
 
 @dataclass
 class Projection:
+    """Represents a film projection in a cinema with specific time and language."""
     film: Film
     cinema: Cinema
     time: Tuple[int, int]  # hour:minute
@@ -39,23 +43,45 @@ class Projection:
 
 @dataclass
 class Billboard:
+    """Represents a cinema billboard with a list of films, cinemas, and projections."""
     films: List[Film]
     cinemas: List[Cinema]
     projections: List[Projection]
 
     def search_by_title(self, word: str) -> List[Projection]:
+        """Returns all projections of the films that contain the provided word in their title.
+
+        Args:
+            word (str): A word to look for in film titles.
+        """
         return [p for p in self.projections if word.lower() in p.film.title.lower()]
 
     def search_by_genre(self, genre: str) -> List[Film]:
+        """Returns all films of the specified genre.
+
+        Args:
+            genre (str): A film genre to look for.
+        """
         return [f for f in self.films if f.genre.lower() == genre.lower()]
 
     def search_by_director(self, director: str) -> List[Film]:
+        """Returns all films directed by the specified director.
+
+        Args:
+            director (str): A director's name to look for.
+        """
         return [f for f in self.films if f.director.lower() == director.lower()]
 
     def search_by_actor(self, actor: str) -> List[Film]:
+        """Returns all films where the specified actor is cast.
+
+        Args:
+            actor (str): An actor's name to look for.
+        """
         return [f for f in self.films if actor.lower() in (a.lower() for a in f.actors)]
 
     def print_billboard(self):
+        """Prints the details of all films, cinemas, and projections on the billboard."""
         print(f"{'='*40}\n{' '*10}CINEMA BILLBOARD\n{'='*40}")
 
         print("\nFilms:")
@@ -74,6 +100,7 @@ class Billboard:
 
 
 def get_date_text() -> str:
+    """Returns today's date in the format 'weekday day'."""
     date = datetime.datetime.now()
     day = date.day
     weekday = date.weekday()
@@ -83,6 +110,11 @@ def get_date_text() -> str:
 
 
 def get_lat_long(address: str):
+    """Returns the latitude and longitude of the specified address.
+
+    Args:
+        address (str): An address to get the latitude and longitude for.
+    """
     geolocator = Nominatim(user_agent="geoapiExercises")
     try:
         # print("Address: " + address)
@@ -115,62 +147,97 @@ def get_lat_long(address: str):
         return (location.latitude, location.longitude)
 
 
-# The 'read' function is a placeholder here, since it's not clear where and how to return the Billboard.
 def read() -> Billboard:
-    # download the necessary data
+    """Read and parse data from a web page to create a Billboard object.
 
-    # get date_text:
+    Returns:
+        Billboard: A Billboard object that contains information about films, cinemas, and projections.
+    """
+    # download the necessary data
+    # get current date_text:
     date_text = get_date_text()
 
+    # target URL
     url = "https://www.sensacine.com/cines/cines-en-72480/"
+
+    # make a GET request to fetch the raw HTML content
     response = requests.get(url)
+
+    # parse the HTML content
     soup = BeautifulSoup(response.text, "lxml")
 
+    # create empty lists for cinemas, films, and projections
     cinemas: List[Cinema] = []
     films: List[Film] = []
     projections: List[Projection] = []
 
+    # find necessary divs in the parsed HTML content
     div = soup.find("div", id="col_content")
-
     cinema_divs = div.find_all("div", class_="margin_10b j_entity_container")
     movie_divs = div.find_all("div", class_="j_w j_tabs")
 
+    # iterate through each cinema and corresponding movie div
     for cinemaDiv, movieDiv in zip(cinema_divs, movie_divs):
+        # extract cinema name
         name_h2 = cinemaDiv.find("h2", class_="tt_18")
         cine_name = name_h2.a.text.strip()
+
+        # extract cinema address
         address_span = cinemaDiv.find_all("span", class_="lighten")[1]
         cine_address = address_span.text.strip()
+
+        # get the latitude and longitude for the cinema address
         latitude, longitude = get_lat_long(cine_address)
+
+        # create an Address object and a Cinema object
         cine_address = Address(latitude, longitude, cine_address)
         cinema = Cinema(cine_name, cine_address)
+
+        # add the cinema to the list of cinemas
         cinemas.append(cinema)
 
+        # find necessary divs in the movieDiv
         tabs_box_panels = movieDiv.find("div", class_="tabs_box_panels")
         tabs_box = tabs_box_panels.find(
             "div", class_="tabs_box_pan item-0") if tabs_box_panels else None
+
         if tabs_box:
+            # iterate through each item_resa div in tabs_box
             for item_resa in tabs_box.find_all("div", class_="item_resa"):
+                # extract movie data
                 div_j_w = item_resa.find("div", class_="j_w")
+
+                # ignore if no movie data
                 if div_j_w.find("a", class_="underline") is None:
                     continue
+
                 data_movie = div_j_w["data-movie"]
 
+                # extract the showtimes for the movie
                 ulHours = item_resa.find("ul", class_="list_hours")
                 hours = []
                 for li in ulHours.find_all("li"):
                     hours.append(li.em.text.strip())
 
+                # set movie language to Spanish ("ES")
                 language = "ES"
+
+                # parse the movie data
                 movie_data = json.loads(data_movie)
 
+                # extract details from the parsed movie data
                 film_title = movie_data["title"]
                 genre = movie_data["genre"]
                 director = movie_data["directors"][0]
                 actors = movie_data["actors"]
 
+                # create a Film object
                 film = Film(film_title, genre, director, actors)
+
+                # add the film to the list of films
                 films.append(film)
 
+                # create a Projection object for each showtime and add it to the list of projections
                 for hour in hours:
                     # assuming time is in "HH:MM" format
                     hour_str, minute_str = hour.split(':')
@@ -183,4 +250,5 @@ def read() -> Billboard:
         else:
             continue
 
+    # create a Billboard object with the lists of films, cinemas, and projections
     return Billboard(films, cinemas, projections)
