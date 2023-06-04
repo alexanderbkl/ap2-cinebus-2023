@@ -10,10 +10,24 @@ import osmnx as ox
 
 
 def create_billboard():
+    """Create a billboard with cinema and film data
+
+    Returns:
+        Billboard: A Billboard object with loaded cinema and film data.
+    """
     return billboard.read()
 
 
 def search_billboard(billboard, keyword):
+    """Searches the billboard for films containing the provided keyword.
+
+    Args:
+        billboard (Billboard): The billboard to search.
+        keyword (str): The keyword to search for.
+
+    Returns:
+        list: A list of matching Projection objects.
+    """
     matching_projections = []
     for projection in billboard.projections:
         if keyword.lower() in projection.film.title.lower():
@@ -29,22 +43,61 @@ def search_billboard(billboard, keyword):
 
 
 def create_city_graph():
+    """Create a graph representation of the city.
+
+    Returns:
+        Graph: A Graph object representing the city.
+    """
     return city.get_city_graph()
 
 
 def find_path_to_cinema(city_graph, start_location, cinema_location):
+    """Find the shortest path in the city graph from the start location to the cinema location.
+
+    Args:
+        city_graph (Graph): The city graph.
+        start_location (tuple): The starting location.
+        cinema_location (tuple): The cinema location.
+
+    Returns:
+        list: A list of nodes representing the shortest path.
+    """
     return city.find_path(city_graph, start_location, cinema_location)
 
 
 def plot_path(city_graph, path, filename):
+    """Plot the path on the city graph and save it as an image.
+
+    Args:
+        city_graph (Graph): The city graph.
+        path (list): The path to plot.
+        filename (str): The name of the file to save the plot to.
+    """
     return city.plot_path(city_graph, path, filename)
 
 
 def Path(node, type):
+    """Create a Path object.
+
+    Args:
+        node (Node): The node in the path.
+        type (str): The type of path.
+
+    Returns:
+        Path: A Path object.
+    """
     return city.Path(node, type)
 
 
 def get_lat_long(address):
+    """Get the latitude and longitude for a given address.
+
+    Args:
+        address (str): The address to geocode.
+
+    Returns:
+        tuple: The latitude and longitude of the address, or (None, None) if the address could not be geocoded.
+    """
     try:
         result = ox.geocode(address)
         if isinstance(result, tuple):
@@ -65,6 +118,7 @@ def get_lat_long(address):
 
 
 def main():
+    """Main function of the script. Handles user input and calls other functions to search the billboard, create the city graph, find the shortest path to the cinema, and plot the path."""
     print("Author: David T.T.")
     billboard = create_billboard()
 
@@ -78,7 +132,7 @@ def main():
         # print formatted projection film title and cinema name
         print(projection.film.title + ' - ' + projection.cinema.name)
 
-    bus_graph = buses.get_buses_graph()
+    # bus_graph = buses.get_buses_graph()
     # print("Showing bus graph...")
     # buses.show(bus_graph)
     # print("Saving bus image plot...")
@@ -112,17 +166,6 @@ def main():
         city_graph, start_location, cinema_location)
 
     projection_time = matching_projections[0].time
-
-    # print(f'Time to get to the cinema: {time_to_cinema} minutes')
-
-    # now = datetime.now()
-    # current_time_in_minutes = now.hour * 60 + now.minute
-
-    # if current_time_in_minutes + time_to_cinema < projection_time:
-    #    print("You can make it to the cinema in time for the projection!")
-    # else:
-    #    print("You will not be able to reach the cinema in time for the projection.")
-    # projection_time is f.e. 1345 (hhmm)
 
     # Variable to keep track of the current line
     current_line = ''
