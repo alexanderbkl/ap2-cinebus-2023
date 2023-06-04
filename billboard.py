@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 import json
-import time
 from typing import List, Tuple
 import datetime
 import requests

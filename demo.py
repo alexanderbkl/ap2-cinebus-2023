@@ -1,9 +1,6 @@
 from datetime import datetime
-from staticmap import StaticMap, CircleMarker, Line
 import billboard
-import buses
 import city
-from haversine import haversine, Unit
 from typing import List
 import datetime
 import osmnx as ox
