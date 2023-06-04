@@ -6,10 +6,8 @@ import osmnx as ox
 from osmnx import distance
 import pickle
 import os
-from geopy.distance import geodesic
 from buses import BusesGraph, get_buses_graph
-from haversine import haversine, Unit
-import matplotlib.pyplot as plt
+from haversine import haversine
 from staticmap import StaticMap, CircleMarker, Line, IconMarker
 from PIL import Image, ImageDraw, ImageFont
 
