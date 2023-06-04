@@ -1,0 +1,5 @@
+Instalar dependencias con pip3 install -r requirements.txt
+
+Descargar e instalar graphviz manualmente de https://www.graphviz.org/download/https://www.graphviz.org/download/
+
+Ejecutar el programa con python3 demo.py
